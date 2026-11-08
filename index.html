@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta name="robots" content="noindex,nofollow">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7f2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="めまいノート">
+  <meta name="description" content="日々の調子を、あなたのペースで。めまいの記録を残す患者向けプロトタイプ。">
+  <title>めまいノート — あなたのペースで、毎日の記録</title>
+  <link rel="manifest" href="/memai-note-prototype/patient/manifest.webmanifest">
+  <link rel="icon" href="/memai-note-prototype/patient/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/memai-note-prototype/patient/icon-192.png">
+  <link rel="stylesheet" href="/memai-note-prototype/patient/patient.css">
+  <script type="module" src="/memai-note-prototype/patient/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">本文へ</a>
+  <div class="app-frame">
+    <div class="prototype-bar"><span class="tiny-dot"></span> 患者アプリ・プロトタイプ <span>この端末だけに保存</span></div>
+    <header class="topbar">
+      <a class="brand" href="#today" aria-label="めまいノート 今日へ"><span class="brand-mark" aria-hidden="true">◜</span>めまいノート</a>
+      <button class="help-button" data-action="urgent" aria-label="急な症状で困ったとき"><span data-icon="alert"></span><span>困ったとき</span></button>
+    </header>
+    <div id="modeBanner" hidden></div>
+    <main id="main" tabindex="-1"><div class="loading"><span class="brand-mark">◜</span><p>ノートをひらいています…</p></div></main>
+    <nav class="bottom-nav" aria-label="メインメニュー">
+      <a href="#today" data-nav="today"><span data-icon="home"></span><span>今日</span></a>
+      <a href="#history" data-nav="history"><span data-icon="chart"></span><span>ふりかえり</span></a>
+      <a href="#care" data-nav="care"><span data-icon="message"></span><span>医療者から</span></a>
+      <a href="#settings" data-nav="settings"><span data-icon="settings"></span><span>設定</span></a>
+    </nav>
+  </div>
+  <dialog id="sheet" aria-labelledby="sheetTitle"><div id="sheetContent"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">このプロトタイプの操作にはJavaScriptを有効にしてください。</p></noscript>
+</body>
+</html>
