@@ -7,3 +7,4 @@
 .help-button{display:flex;align-items:center;gap:5px;padding:10px 0 10px 7px;min-height:46px;background:none;color:var(--amber);font-size:.74rem;white-space:nowrap}.help-button .icon{width:18px;height:18px}
 @media print{body{overflow:visible!important}}
 @media(max-width:359px){.brand{font-size:.96rem;gap:6px}.help-button{font-size:.69rem}}
+.range-card{margin-top:-8px;margin-bottom:20px}.range-card .field{margin:0 0 10px}.range-card input[type=date]{width:100%;min-width:0}

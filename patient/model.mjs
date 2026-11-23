@@ -9,6 +9,15 @@ export function daysEndingToday(count, now = new Date()) {
     return dateKey(d);
   });
 }
+// Inclusive list of calendar days for a patient-chosen range (e.g. previous visit to this visit).
+export function daysBetween(from, to, maxDays = 366) {
+  const valid = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '') && Number.isFinite(new Date(`${v}T12:00`).getTime());
+  if (!valid(from) || !valid(to)) return [];
+  const [start, end] = from <= to ? [from, to] : [to, from];
+  const dates = []; const d = new Date(`${start}T12:00`);
+  while (dateKey(d) <= end && dates.length < maxDays) { dates.push(dateKey(d)); d.setDate(d.getDate() + 1); }
+  return dates;
+}
 export const impactLabels = { normal: 'いつもどおり過ごせた', limited: '少し控えて過ごした', help: '支えや手助けが必要だった', rest: 'ほとんど休んでいた' };
 export const safetyLabels = { no: '挙げられた症状はない', yes: '当てはまる症状がある', unsure: '自分ではわからない' };
 export function validateRecord(draft) {

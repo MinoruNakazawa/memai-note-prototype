@@ -1,4 +1,4 @@
-import { dateKey, daysEndingToday, impactLabels, safetyLabels, validateRecord, summarize, recordsToCsv, sampleRecords } from './model.mjs';
+import { dateKey, daysEndingToday, daysBetween, impactLabels, safetyLabels, validateRecord, summarize, recordsToCsv, sampleRecords } from './model.mjs';
 import { allRecords, getVideo, getPreference, setPreference, saveRecord, seedSamples } from './storage.mjs';
 
 const paths = {
@@ -30,7 +30,7 @@ const paths = {
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.note}</svg>`;
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const state = { records: [], mode: 'own', view: 'today', period: 7, filter: 'all', settings: {}, flow: null, videoFile: null, videoUrl: null, saving: false, detailId: null, installEvent: null };
+const state = { records: [], mode: 'own', view: 'today', period: 7, rangeFrom: '', rangeTo: '', filter: 'all', settings: {}, flow: null, videoFile: null, videoUrl: null, saving: false, detailId: null, installEvent: null };
 const sheet = $('#sheet');
 let toastTimer;
 let lastFocus;
@@ -82,16 +82,20 @@ function homeView() {
   ${storageNote()}<button class="emergency-link" data-action="urgent">${icon('alert')}急な症状で困ったとき</button>
   ${state.mode === 'own' ? '<div class="sample-link"><p>使い方を試してみたい方へ</p><button class="text-button" data-action="sample-mode">サンプルを見る →</button></div>' : ''}`;
 }
+const fmtFullDate = date => new Date(`${date}T12:00:00`).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+function periodDates() { return state.period === 'custom' ? daysBetween(state.rangeFrom, state.rangeTo) : daysEndingToday(state.period); }
+function periodLabel() { const dates = periodDates(); return state.period === 'custom' ? `${fmtFullDate(dates[0])}〜${fmtFullDate(dates.at(-1))}` : `直近${state.period}日`; }
 function historyView() {
-  const dates = daysEndingToday(state.period); const summary = summarize(records(), dates);
+  const dates = periodDates(); const summary = summarize(records(), dates);
   const filtered = summary.selected.filter(r => state.filter === 'all' || r.kind === state.filter).sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
   const chartDates = daysEndingToday(7); const chartSummary = summarize(records(), chartDates);
   return `<header class="page-header"><p class="eyebrow">MY JOURNAL</p><h1>ふりかえり</h1><p>日々の変化を、診察で話すきっかけに。</p></header>
-  <div class="segmented" aria-label="表示する期間">${[7, 30].map(n => `<button data-action="period" data-value="${n}" aria-pressed="${state.period === n}">直近${n}日</button>`).join('')}</div>
-  <section class="card"><div class="stat-row"><div><small>日常記録</small><strong>${summary.recordedDays}</strong><em>/ ${state.period}日</em></div><div><small>症状なし</small><strong>${[...summary.dailyByDate.values()].filter(r => r.score === 0).length}</strong><em>日</em></div><div><small>発作の記録</small><strong>${summary.attacks}</strong><em>件</em></div></div><h3>めまいの強さ <small class="muted">直近7日・日常記録</small></h3><div class="chart" role="img" aria-label="日常記録の強さ。${chartDates.map(d => `${fmtDate(d, false)} ${chartSummary.dailyByDate.has(d) ? chartSummary.dailyByDate.get(d).score : '未記録'}`).join('、')}">${chartDates.map(date => { const r = chartSummary.dailyByDate.get(date); return `<div class="chart-col">${r ? `<span>${r.score}</span><div class="chart-bar ${r.score >= 6 ? 'high' : ''}" style="height:${5 + r.score * 6}px"></div>` : '<span class="chart-empty">–</span>'}<span>${new Date(`${date}T12:00`).getDate()}日</span></div>`; }).join('')}</div><p class="empty-hint">記録から原因や診断は決められません。変化は医療者と一緒に確認しましょう。</p></section>
+  <div class="segmented" aria-label="表示する期間">${[7, 30].map(n => `<button data-action="period" data-value="${n}" aria-pressed="${state.period === n}">直近${n}日</button>`).join('')}<button data-action="period" data-value="custom" aria-pressed="${state.period === 'custom'}">期間を指定</button></div>
+  ${state.period === 'custom' ? `<div class="card range-card"><div class="two-columns"><label class="field"><span>開始日</span><input type="date" id="rangeFrom" value="${esc(state.rangeFrom)}" max="${dateKey()}"></label><label class="field"><span>終了日</span><input type="date" id="rangeTo" value="${esc(state.rangeTo)}" max="${dateKey()}"></label></div><p class="small muted">前回の受診日から今回の受診日まで、などを選べます（${dates.length}日間・最長1年）。</p></div>` : ''}
+  <section class="card"><div class="stat-row"><div><small>日常記録</small><strong>${summary.recordedDays}</strong><em>/ ${dates.length}日</em></div><div><small>症状なし</small><strong>${[...summary.dailyByDate.values()].filter(r => r.score === 0).length}</strong><em>日</em></div><div><small>発作の記録</small><strong>${summary.attacks}</strong><em>件</em></div></div><h3>めまいの強さ <small class="muted">直近7日・日常記録</small></h3><div class="chart" role="img" aria-label="日常記録の強さ。${chartDates.map(d => `${fmtDate(d, false)} ${chartSummary.dailyByDate.has(d) ? chartSummary.dailyByDate.get(d).score : '未記録'}`).join('、')}">${chartDates.map(date => { const r = chartSummary.dailyByDate.get(date); return `<div class="chart-col">${r ? `<span>${r.score}</span><div class="chart-bar ${r.score >= 6 ? 'high' : ''}" style="height:${5 + r.score * 6}px"></div>` : '<span class="chart-empty">–</span>'}<span>${new Date(`${date}T12:00`).getDate()}日</span></div>`; }).join('')}</div><p class="empty-hint">記録から原因や診断は決められません。変化は医療者と一緒に確認しましょう。</p></section>
   <div class="section-heading"><h2>残した記録</h2>${sampleBadge()}</div><div class="segmented" aria-label="記録の種類">${[['all','すべて'],['daily','日常'],['attack','発作']].map(([v,l]) => `<button data-action="filter" data-value="${v}" aria-pressed="${state.filter === v}">${l}</button>`).join('')}</div>
   ${filtered.length ? `<div class="record-list">${filtered.map(r => `<button class="record-item" data-action="detail" data-id="${esc(r.id)}"><span class="record-score">${r.score === 0 ? icon('leaf') : r.score}</span><span><strong>${fmtDate(r.date)} <span class="badge ${r.kind === 'attack' ? 'amber' : ''}">${r.kind === 'attack' ? '発作' : '日常'}</span></strong><small>${r.score === 0 ? '症状なし' : `強さ ${r.score} / 10`}${r.videoName ? ' · 動画あり' : ''}${r.safety !== 'no' ? ' · 症状確認あり' : ''}</small></span>${icon('chevron')}</button>`).join('')}</div>` : `<div class="card empty">${icon('note')}<h2>この期間の記録はありません</h2><p>今日の調子から、少しずつ。</p><button class="button light" data-action="daily">今日の記録をつける</button></div>`}
-  <div class="section-heading"><h2>診察に持っていく</h2></div><div class="card"><p class="small muted">表示中の${state.period}日分をまとめます。動画本体は含まれません。</p><div class="stack spacer-top"><button class="button light wide" data-action="report" ${!summary.selected.length ? 'disabled' : ''}>${icon('print')}診察用レポート / PDF</button><button class="button outline wide" data-action="csv" ${!summary.selected.length ? 'disabled' : ''}>${icon('download')}CSVで保存</button></div></div>${storageNote()}`;
+  <div class="section-heading"><h2>診察に持っていく</h2></div><div class="card"><p class="small muted">表示中の期間（${esc(periodLabel())}・${dates.length}日分）をまとめます。動画本体は含まれません。</p><div class="stack spacer-top"><button class="button light wide" data-action="report" ${!summary.selected.length ? 'disabled' : ''}>${icon('print')}診察用レポート / PDF</button><button class="button outline wide" data-action="csv" ${!summary.selected.length ? 'disabled' : ''}>${icon('download')}CSVで保存</button></div></div>${storageNote()}`;
 }
 function careView() {
   const ack = state.settings.sampleAcknowledged;
@@ -105,7 +109,7 @@ function settingsView() {
   <section class="card"><h2>見やすさ</h2><div class="setting-row"><div><strong id="largeLabel">文字を大きくする</strong><p>アプリ全体の文字サイズを変更</p></div><button class="switch" role="switch" aria-labelledby="largeLabel" aria-checked="${!!state.settings.largeText}" data-action="large-text"></button></div></section>
   <section class="card"><h2>記録する時間の目安</h2><p class="small muted spacer-top">無理のない時間を決めておけます。<br>端末への通知機能は、まだありません。</p><label class="field"><span>目安の時刻 <small>任意</small></span><input id="reminderTime" type="time" value="${esc(state.settings.reminder || '')}"></label><button class="button outline wide" data-action="reminder">時刻を保存</button></section>
   <section class="card"><h2>アプリについて</h2><button class="row-button" data-action="install">${icon('plus')}ホーム画面に追加する${icon('chevron')}</button><button class="row-button" data-action="help">${icon('help')}使い方とデータの扱い${icon('chevron')}</button><button class="row-button" data-action="trash">${icon('note')}一覧から外した記録${icon('chevron')}</button><button class="row-button" data-action="${state.mode === 'sample' ? 'own-mode' : 'sample-mode'}">${icon('note')}${state.mode === 'sample' ? '自分の記録へ戻る' : 'サンプルで操作を試す'}${icon('chevron')}</button></section>
-  <div class="notice">ここでの記録や動画は、この端末のブラウザ内だけに保存されます。ブラウザのデータ消去や端末の変更では引き継がれません。必要な記録はレポートで保存してください。動画は元のファイルも保管してください。</div><p class="small muted">実際の個人情報を使わずにお試しください。認証・医療者との共有は、本番に向けて今後整備する機能です。</p><p class="version">めまいノート · Patient prototype 1.0<br><a href="/memai-note-prototype/preview.html">プロトタイプ一覧</a></p>`;
+  <div class="notice">ここでの記録や動画は、この端末のブラウザ内だけに保存されます。ブラウザのデータ消去や端末の変更では引き継がれません。必要な記録はレポートで保存してください。動画は元のファイルも保管してください。</div><p class="small muted">実際の個人情報を使わずにお試しください。認証・医療者との共有は、本番に向けて今後整備する機能です。</p><p class="version">めまいノート · Patient prototype 1.1<br><a href="/memai-note-prototype/preview.html">プロトタイプ一覧</a></p>`;
 }
 function openSheet(html) {
   lastFocus = document.activeElement;
@@ -123,7 +127,7 @@ function closeSheet() {
   if (lastFocus?.isConnected) lastFocus.focus(); else $('#main').focus({ preventScroll: true });
 }
 function urgentContent() {
-  return `<div class="notice danger"><strong>記録や撮影より、救急への連絡を優先してください。</strong><p>急に、ろれつが回らない、片側の手足に力が入らない、激しい頭痛、支えなしで立てないほどのふらつき等がある場合は、119へ連絡してください。</p></div><a class="button danger wide" href="tel:119">119に電話する</a><p class="small muted spacer-top">上に当てはまらなくても、新しい症状や不安があるときは医療機関に相談してください。このアプリで原因や緊急性は判断できません。</p><p class="small spacer-top"><a href="https://kakarikata.mhlw.go.jp/kakaritsuke/urgency.html" target="_blank" rel="noopener noreferrer">厚生労働省：こんな時は迷わず119へ ↗</a></p>`;
+  return `<div class="notice danger"><strong>記録や撮影より、救急への連絡を優先してください。</strong><p>急に、ろれつが回らない、片側の手足に力が入らない、激しい頭痛、支えなしで立てないほどのふらつき等がある場合は、お近くの救急外来を受診するか、下記から119へ連絡してください。</p></div><a class="button danger wide" href="tel:119">119に電話する</a><p class="small muted spacer-top">上に当てはまらなくても、新しい症状や不安があるときは医療機関に相談してください。このアプリで原因や緊急性は判断できません。</p><p class="small spacer-top"><a href="https://kakarikata.mhlw.go.jp/kakaritsuke/urgency.html" target="_blank" rel="noopener noreferrer">厚生労働省：こんな時は迷わず119へ ↗</a></p>`;
 }
 function showUrgent() { openSheet(`${sheetTop('急な症状で困ったとき')}${urgentContent()}<div class="flow-footer"><button class="button outline wide" data-action="close">ノートに戻る</button></div>`); }
 function showHelp() {
@@ -162,7 +166,7 @@ function safetyFields(d) {
   return `<fieldset><legend>気になる症状はありますか？<span class="required">必須</span></legend><div class="safety-list"><p>次のような、急に起きた症状について教えてください。</p><ul><li>ろれつが回らない・うまく話せない</li><li>片側の手足に力が入らない</li><li>突然の激しい頭痛</li><li>支えなしで立てないほどのふらつき</li></ul></div><div class="choices">${radio('safety', 'no', '挙げられた症状はない', d.safety)}${radio('safety', 'yes', '当てはまる症状がある', d.safety)}${radio('safety', 'unsure', '自分ではわからない', d.safety)}</div><div id="safetyAdvice" role="status" aria-live="polite" ${!d.safety || d.safety === 'no' ? 'hidden' : ''}>${d.safety === 'yes' ? urgentContent() : '<div class="notice warn">症状が急に出た場合や判断に迷う場合は、記録を続ける前に医療機関へ相談してください。上のような急な症状がある場合は119へ連絡してください。</div>'}</div></fieldset>`;
 }
 function detailFields(d) {
-  return `<details><summary>もう少し残す <span class="muted small">任意</span></summary>${selectField('sensation','どんな感じ？',['ぐるぐる回る','ふわふわ・ふらふらする','くらっとする','うまく表せない'],d.sensation)}${selectField('sleep','昨夜の睡眠',['よく眠れた','ふつう','あまり眠れなかった'],d.sleep)}${selectField('stress','今日のストレス',['あまりなかった','少しあった','強く感じた'],d.stress)}${selectField('rehab','教わったリハビリ',['教わった運動を行った','今日は行わなかった','症状が出て中止した','運動の指示はない'],d.rehab)}<label class="field"><span>薬の名前 <small>任意</small></span><input name="medicationName" maxlength="100" placeholder="薬の袋などを見て入力" value="${esc(d.medicationName)}"></label><div class="two-columns"><label class="field"><span>飲んだ量 <small>任意</small></span><input name="medicationDose" maxlength="50" placeholder="例：1錠" value="${esc(d.medicationDose)}"></label><label class="field"><span>飲んだ時刻 <small>任意</small></span><input type="time" name="medicationTime" value="${esc(d.medicationTime)}"></label></div><label class="field"><span>メモ <small>任意</small></span><textarea name="note" maxlength="2000" placeholder="いつもと違ったこと、気になったことなど">${esc(d.note)}</textarea></label></details>`;
+  return `<details><summary>もう少し詳しく記録<span class="muted small">任意</span></summary>${selectField('sensation','どんな感じ？',['ぐるぐる回る','ふわふわ・ふらふらする','くらっとする','うまく表せない'],d.sensation)}${selectField('sleep','昨夜の睡眠',['よく眠れた','ふつう','あまり眠れなかった'],d.sleep)}${selectField('stress','今日のストレス',['あまりなかった','少しあった','強く感じた'],d.stress)}${selectField('rehab','教わったリハビリ',['教わった運動を行った','今日は行わなかった','症状が出て中止した','運動の指示はない'],d.rehab)}<label class="field"><span>薬の名前 <small>任意</small></span><input name="medicationName" maxlength="100" placeholder="薬の袋などを見て入力" value="${esc(d.medicationName)}"></label><div class="two-columns"><label class="field"><span>飲んだ量 <small>任意</small></span><input name="medicationDose" maxlength="50" placeholder="例：1錠" value="${esc(d.medicationDose)}"></label><label class="field"><span>飲んだ時刻 <small>任意</small></span><input type="time" name="medicationTime" value="${esc(d.medicationTime)}"></label></div><label class="field"><span>メモ <small>任意</small></span><textarea name="note" maxlength="2000" placeholder="いつもと違ったこと、気になったことなど">${esc(d.note)}</textarea></label></details>`;
 }
 function authorFields(d) { return `<details><summary>家族・介助者が入力する場合</summary><label class="check-label"><input type="checkbox" name="family" ${d.author === 'family' ? 'checked' : ''}><span>本人と内容を確認して、代わりに入力しています<small>記録に入力者の区分を残します。端末外への共有権限を付与する機能ではありません。</small></span></label></details>`; }
 function videoFields(d) {
@@ -236,7 +240,7 @@ async function setMode(mode) {
   state.records = await allRecords(); render(); window.scrollTo(0,0);
   toast(mode === 'sample' ? '体験モードです。自分の記録とは分けて保存します。' : '自分の記録に戻りました');
 }
-function exportRecords() { return summarize(records(), daysEndingToday(state.period)).selected.sort((a,b) => a.date.localeCompare(b.date)); }
+function exportRecords() { return summarize(records(), periodDates()).selected.sort((a,b) => a.date.localeCompare(b.date)); }
 function downloadCsv() {
   const blob = new Blob([recordsToCsv(exportRecords())], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = `めまいノート${state.mode === 'sample' ? '_サンプル' : ''}_${dateKey()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -244,10 +248,10 @@ function downloadCsv() {
 }
 function prepareReport() {
   const selected = exportRecords(); if (!selected.length) return;
-  openSheet(`${sheetTop('診察用レポート')}<p class="sheet-description">直近${state.period}日分・${selected.length}件 ${sampleBadge()}</p><div class="notice">「印刷・PDFにする」を押すと端末の印刷画面が開きます。PDFで保存できるかは端末によって異なります。印刷先や保存先はご自身で確認してください。</div><p class="small muted">動画本体は含まれません。服薬・メモなどの内容を確認してから、医療者に提示してください。</p><div class="flow-footer"><button class="button wide" data-action="print">${icon('print')}印刷・PDFにする</button><button class="button outline wide" data-action="close">戻る</button></div>`);
+  openSheet(`${sheetTop('診察用レポート')}<p class="sheet-description">${esc(periodLabel())}・${selected.length}件 ${sampleBadge()}</p><div class="notice">「印刷・PDFにする」を押すと端末の印刷画面が開きます。PDFで保存できるかは端末によって異なります。印刷先や保存先はご自身で確認してください。</div><p class="small muted">動画本体は含まれません。服薬・メモなどの内容を確認してから、医療者に提示してください。</p><div class="flow-footer"><button class="button wide" data-action="print">${icon('print')}印刷・PDFにする</button><button class="button outline wide" data-action="close">戻る</button></div>`);
   document.querySelector('.report-only')?.remove();
   const report = document.createElement('article'); report.className = 'report-only';
-  report.innerHTML = `<h1>めまいノート · 診察用レポート${state.mode === 'sample' ? '（サンプル）' : ''}</h1><p>対象：${fmtDate(daysEndingToday(state.period)[0])}〜${fmtDate(dateKey())} ／ 作成：${esc(new Date().toLocaleString('ja-JP'))}</p><p>本人・家族による自己記録です。診断・医療者の確認結果ではありません。動画本体は別途ご確認ください。</p><table><thead><tr><th>日付・種類</th><th>強さ / 生活</th><th>症状確認</th><th>経過・生活・服薬・メモ</th></tr></thead><tbody>${selected.map(r => `<tr><td>${esc(r.date)}<br>${r.kind === 'daily' ? '日常' : '発作'}<br>${r.author === 'family' ? '家族・介助者入力' : '本人入力'}</td><td>${r.score} / 10<br>${esc(impactLabels[r.impact] || '生活への影響は未記録')}</td><td>${esc(safetyLabels[r.safety] || '未確認')}</td><td>${[r.startedAt && `開始 ${r.startedAt.replace('T',' ')}`, r.duration, r.sensation, r.trigger, ...(r.symptoms || []), r.sleep && `睡眠 ${r.sleep}`, r.stress && `ストレス ${r.stress}`, r.medicationName && `薬 ${r.medicationName} ${r.medicationDose || ''} ${r.medicationTime || ''}`, r.rehab, r.note, r.videoName && `動画 ${r.videoName}`, r.videoQuality].filter(Boolean).map(esc).join('<br>')}</td></tr>`).join('')}</tbody></table><p>診察で話したいこと：${esc(state.settings[`${state.mode}Question`] || '未記入')}</p>`;
+  report.innerHTML = `<h1>めまいノート · 診察用レポート${state.mode === 'sample' ? '（サンプル）' : ''}</h1><p>対象：${fmtFullDate(periodDates()[0])}〜${fmtFullDate(periodDates().at(-1))} ／ 作成：${esc(new Date().toLocaleString('ja-JP'))}</p><p>本人・家族による自己記録です。診断・医療者の確認結果ではありません。動画本体は別途ご確認ください。</p><table><thead><tr><th>日付・種類</th><th>強さ / 生活</th><th>症状確認</th><th>経過・生活・服薬・メモ</th></tr></thead><tbody>${selected.map(r => `<tr><td>${esc(r.date)}<br>${r.kind === 'daily' ? '日常' : '発作'}<br>${r.author === 'family' ? '家族・介助者入力' : '本人入力'}</td><td>${r.score} / 10<br>${esc(impactLabels[r.impact] || '生活への影響は未記録')}</td><td>${esc(safetyLabels[r.safety] || '未確認')}</td><td>${[r.startedAt && `開始 ${r.startedAt.replace('T',' ')}`, r.duration, r.sensation, r.trigger, ...(r.symptoms || []), r.sleep && `睡眠 ${r.sleep}`, r.stress && `ストレス ${r.stress}`, r.medicationName && `薬 ${r.medicationName} ${r.medicationDose || ''} ${r.medicationTime || ''}`, r.rehab, r.note, r.videoName && `動画 ${r.videoName}`, r.videoQuality].filter(Boolean).map(esc).join('<br>')}</td></tr>`).join('')}</tbody></table><p>診察で話したいこと：${esc(state.settings[`${state.mode}Question`] || '未記入')}</p>`;
   document.body.append(report);
 }
 async function handleAction(button) {
@@ -260,7 +264,7 @@ async function handleAction(button) {
     case 'daily': await openFlow('daily', dailyToday()); break;
     case 'attack': await openFlow('attack'); break;
     case 'close': closeSheet(); break;
-    case 'period': state.period = Number(button.dataset.value); render(); break;
+    case 'period': if (button.dataset.value === 'custom') { state.period = 'custom'; if (!state.rangeFrom || !state.rangeTo) { state.rangeFrom = daysEndingToday(30)[0]; state.rangeTo = dateKey(); } } else state.period = Number(button.dataset.value); render(); break;
     case 'filter': state.filter = button.dataset.value; render(); break;
     case 'detail': await showDetail(button.dataset.id); break;
     case 'edit': { const r = records().find(item => item.id === button.dataset.id); if (r) await openFlow(r.kind,r); break; }
@@ -308,6 +312,12 @@ document.addEventListener('input', event => {
   }
 });
 document.addEventListener('change', event => {
+  if (event.target.id === 'rangeFrom' || event.target.id === 'rangeTo') {
+    const { id, value } = event.target; if (!value) return;
+    state[id] = value > dateKey() ? dateKey() : value;
+    if (state.rangeFrom > state.rangeTo) [state.rangeFrom, state.rangeTo] = [state.rangeTo, state.rangeFrom];
+    render(); document.getElementById(id)?.focus({ preventScroll: true }); return;
+  }
   if (event.target.id !== 'videoFile') return;
   const file = event.target.files?.[0]; if (!file) return;
   if ((!file.type.startsWith('video/') && !/\.(mp4|mov|m4v|webm|3gp)$/i.test(file.name)) || file.size > 100 * 1024 * 1024) {
