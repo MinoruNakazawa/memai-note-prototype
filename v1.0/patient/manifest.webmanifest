@@ -1,0 +1,25 @@
+{
+  "id": "/memai-note-prototype/v1.0/",
+  "name": "めまいノート",
+  "short_name": "めまいノート",
+  "lang": "ja",
+  "start_url": "/memai-note-prototype/v1.0/",
+  "scope": "/memai-note-prototype/v1.0/",
+  "display": "standalone",
+  "background_color": "#f6f7f2",
+  "theme_color": "#f6f7f2",
+  "icons": [
+    {
+      "src": "/memai-note-prototype/v1.0/patient/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/memai-note-prototype/v1.0/patient/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

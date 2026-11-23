@@ -11,3 +11,8 @@
 入力は閲覧者自身のブラウザ内に保存され、医療者への実送信や端末間同期はありません。
 
 GitHub Pagesのmainブランチから配信します。
+
+## 旧バージョン
+
+- [患者アプリ version 1.0（比較用）](https://minorunakazawa.github.io/memai-note-prototype/v1.0/)
+- [version 1.0 の入口](https://minorunakazawa.github.io/memai-note-prototype/v1.0/preview.html)
